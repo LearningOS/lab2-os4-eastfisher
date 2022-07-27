@@ -77,6 +77,7 @@ impl PageTable {
             frames: Vec::new(),
         }
     }
+    // 在多级页表找到一个虚拟页号对应的页表项的可变引用。如果在遍历的过程中发现有节点尚未创建则会新建一个节点。
     fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let mut idxs = vpn.indexes();
         let mut ppn = self.root_ppn;
