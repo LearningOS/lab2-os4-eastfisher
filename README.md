@@ -1,5 +1,10 @@
 # Open-Source OS Training Comp 2022
 
+## 第一阶段学习记录（截至2022-07-31）
+
+- [第一阶段完成情况](https://github.com/eastfisher/rcore-assignment/blob/main/README.md)
+- [第一阶段学习总结](https://github.com/eastfisher/rcore-assignment/blob/main/notes/report_part1.md)
+
 Welcome to Open-Source OS Training Comp 2022（2022年开源操作系统训练营）.
 ## Scheduling
 - NOTICE current [**SCHEDULING**](./scheduling.md)（2022年开源操作系统训练营的计划安排）!
