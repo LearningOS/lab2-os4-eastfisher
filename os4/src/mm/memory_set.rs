@@ -217,6 +217,14 @@ impl MemorySet {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
     }
+
+    pub fn munmap(&mut self, vpn: VirtPageNum) {
+        for area in &mut self.areas {
+            if vpn < area.vpn_range.get_end() && vpn >= area.vpn_range.get_start() {
+                area.unmap_one(&mut self.page_table, vpn);
+            }
+        }
+    }
 }
 
 /// map area structure, controls a contiguous piece of virtual memory

@@ -2,11 +2,14 @@
 
 use crate::config::MAX_SYSCALL_NUM;
 use crate::mm::convert_to_physical_addr;
-use crate::task::{exit_current_and_run_next, suspend_current_and_run_next, TaskStatus, current_user_token};
+use crate::task::{
+    current_user_token, exit_current_and_run_next, get_first_sched_time, list_syscall_counts, mmap,
+    munmap, suspend_current_and_run_next, TaskStatus,
+};
 use crate::timer::get_time_us;
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct TimeVal {
     pub sec: usize,
     pub usec: usize,
@@ -17,6 +20,12 @@ pub struct TaskInfo {
     pub status: TaskStatus,
     pub syscall_times: [u32; MAX_SYSCALL_NUM],
     pub time: usize,
+}
+
+impl From<TimeVal> for usize {
+    fn from(tv: TimeVal) -> Self {
+        tv.sec * 1_000_000 + tv.usec
+    }
 }
 
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -53,14 +62,26 @@ pub fn sys_set_priority(_prio: isize) -> isize {
 
 // YOUR JOB: 扩展内核以实现 sys_mmap 和 sys_munmap
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    -1
+    mmap(_start, _len, _port)
 }
 
 pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    -1
+    munmap(_start, _len)
 }
 
 // YOUR JOB: 引入虚地址后重写 sys_task_info
-pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
-    -1
+pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
+    let first_sched_ts = get_first_sched_time();
+    let syscall_times = list_syscall_counts();
+    let curr_ts = get_time_us();
+    let token = current_user_token();
+    let ti = convert_to_physical_addr(token, _ti as usize) as *mut TaskInfo;
+    unsafe {
+        *ti = TaskInfo {
+            status: TaskStatus::Running,
+            syscall_times: syscall_times,
+            time: (usize::from(curr_ts) - usize::from(first_sched_ts)) / 1000,
+        }
+    }
+    0
 }

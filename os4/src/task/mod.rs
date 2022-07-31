@@ -14,8 +14,12 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
+use crate::config::{MAX_SYSCALL_NUM, PAGE_SIZE};
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::*;
 use crate::sync::UPSafeCell;
+use crate::syscall::TimeVal;
+use crate::timer::get_time_us;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
 use lazy_static::*;
@@ -79,6 +83,11 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let next_task = &mut inner.tasks[0];
         next_task.task_status = TaskStatus::Running;
+        if !next_task.is_sched {
+            next_task.is_sched = true;
+            let ptr: *mut TimeVal = &mut next_task.first_sched_time;
+            task_get_time(ptr, 0);
+        }
         let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
         drop(inner);
         let mut _unused = TaskContext::zero_init();
@@ -127,6 +136,36 @@ impl TaskManager {
         inner.tasks[inner.current_task].get_trap_cx()
     }
 
+    // LAB1: Try to implement your function to update or get task info!
+    pub fn incr_syscall_count(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_counts[syscall_id] += 1;
+    }
+
+    pub fn list_syscall_counts(&self) -> [u32; MAX_SYSCALL_NUM] {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_counts
+    }
+
+    pub fn get_first_sched_time(&self) -> TimeVal {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].first_sched_time
+    }
+
+    // LAB2
+    fn mmap(&self, start: usize, len: usize, port: usize) -> isize {
+        // TODO
+        0
+    }
+
+    fn munmap(&self, start: usize, len: usize) -> isize {
+        // TODO
+        0
+    }
+
     /// Switch current `Running` task to the task we have found,
     /// or there is no `Ready` task and we can exit with all applications completed
     fn run_next_task(&self) {
@@ -134,6 +173,12 @@ impl TaskManager {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
+            if !inner.tasks[next].is_sched {
+                inner.tasks[next].is_sched = true;
+                let ptr: *mut TimeVal = &mut inner.tasks[next].first_sched_time;
+                task_get_time(ptr, 0);
+                // syscall::syscall(410, [ptr as usize, 0, 0]);
+            }
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
@@ -190,4 +235,39 @@ pub fn current_user_token() -> usize {
 /// Get the current 'Running' task's trap contexts.
 pub fn current_trap_cx() -> &'static mut TrapContext {
     TASK_MANAGER.get_current_trap_cx()
+}
+
+// LAB1: Public functions implemented here provide interfaces.
+// You may use TASK_MANAGER member functions to handle requests.
+pub fn incr_syscall_count(syscall_id: usize) {
+    TASK_MANAGER.incr_syscall_count(syscall_id);
+}
+
+pub fn list_syscall_counts() -> [u32; MAX_SYSCALL_NUM] {
+    TASK_MANAGER.list_syscall_counts()
+}
+
+pub fn get_first_sched_time() -> TimeVal {
+    TASK_MANAGER.get_first_sched_time()
+}
+
+// 绕过syscall层, 直接调用timer获取时间, 解决循环依赖问题
+fn task_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
+    let us = get_time_us();
+    unsafe {
+        *ts = TimeVal {
+            sec: us / 1_000_000,
+            usec: us % 1_000_000,
+        };
+    }
+    0
+}
+
+// LAB2
+pub fn mmap(start: usize, len: usize, port: usize) -> isize {
+    TASK_MANAGER.mmap(start, len, port)
+}
+
+pub fn munmap(start: usize, len: usize) -> isize {
+    TASK_MANAGER.munmap(start, len)
 }
